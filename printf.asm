@@ -1,26 +1,20 @@
 section .text
-global _start
+global _myprintf
 
-_start:;str_from, '+', str, 42, 42, 42, 42, "love", 3802, 100, 33, 15
-                push 15
-                push 33
-                push 100
-                push 3802
-                push StrToPrint
-                push 0
-                push 0
-                push 0
-                push 0
-                push StrToPrint
-                push '+'
-                push StrToPrint
+_myprintf: 
+                pop r15
+                push r9
+                push r8
+                push rcx
+                push rdx
+                push rsi
+                mov rax, rdi
 
                 mov rcx, BUFFER_SIZE
-                mov rax, InpStr
                 mov rbx, Buffer
 
                 call BufWrite
-
+                
                 mov rax, 4
                 mov rbx, 1
                 mov rcx, Buffer
@@ -80,22 +74,16 @@ OpHandler:
 ;               RBX - addr of buffer corrent position
 ; DESTR:        RCX, RDX, r8
 ;===============================================================
-                pop r11                   ; return addr
+                pop r12                   ; return addr
                 push rcx                  ; save rcx value
-                mov rcx, NUMBER_OF_OP
                 xor rdx, rdx
-                xor r8, r8
 
-.loop_strt:
                 mov byte dl, [rax]
-                cmp byte dl, [OPmas + r8]
-                je .equal                
-                add r8, 1
-                loop .loop_strt
-                jmp .default              ; TODO: default case      
+                cmp byte dl, '%'
+                je .op_is_perc
 
-.equal:
-                jmp [JMPmas + r8 * 8]
+                sub rdx, 'b'
+                jmp [JMPmas + rdx] 
 
 .default:       jmp jopa_happend
 ;---------------------------------------------
@@ -118,9 +106,9 @@ OpHandler:
 .strcmp_no_zero:
                 pop rcx
                 pop r8
-.zero_skip:     
+.zero_skip:
                 mov dl, [r8]
-                cmp byte dl, '$'
+                cmp byte dl, 0x00
                 je .it_is_zero
                 cmp byte dl, '0'
                 jne .strncmp_loop
@@ -131,7 +119,7 @@ OpHandler:
                 pop r8                         ; addr of str to input
                                                 
 .strncmp_loop   mov dl, byte [r8]
-                cmp byte dl, '$'
+                cmp byte dl, 0x00
                 je .strncmp_loop_end
                 mov byte [rbx], dl
 
@@ -149,47 +137,19 @@ OpHandler:
                 inc rbx
                 jmp .strncmp_loop_end
 ;---------------------------------------------
-.op_is_x:       pop rcx                        ; разобраться с rcx
+.op_is_x:        
+                pop rcx                        ; разобраться с rcx
                 pop rdx
                 push rcx
                 push rdx
 
-                mov r8, 15
-                mov rcx, 15
+                mov r8, 21
+                mov rcx, 21
+                mov r11, 0x0F
+                mov r13, 4
 
-                mov r9, HexTransform
-                and rdx, 0x0F
-                add r9, rdx
-                mov dl, byte [r9]
-                mov byte [HexToPrint + r8], byte dl
+                jmp .itoa_2x
 
-                add r8, -1
-
-.hex_loop_strt:
-                pop rdx
-                shr rdx, 4
-                push rdx
-
-                mov r9, HexTransform
-                and rdx, 0x0F
-                add r9, rdx
-                mov dl, byte [r9]
-                mov byte [HexToPrint + r8], dl
-
-                add r8, -1
-                loop .hex_loop_strt 
-
-
-                pop rdx
-
-                pop rcx
-                push HexToPrint
-                push rcx
-
-                
-                jmp .strcmp_no_zero
-
-                pop rcx
                 jmp .return
 ;---------------------------------------------
 .op_is_d:       pop rcx
@@ -204,7 +164,7 @@ OpHandler:
                 xor edx, edx
                 mov rax, r8
                 mov r8, 10                     
-                div r8                         ; теперь отсаток от деления на 10 лежит в rdx, частное - в rax
+                div r8                         ; теперь остаток от деления на 10 лежит в rdx, частное - в rax
                 mov r8, rax
                 add rdx, '0'
                 mov byte [DecToPrint + r9], dl
@@ -221,46 +181,19 @@ OpHandler:
 
                 jmp .return
 ;---------------------------------------------
-.op_is_o:       pop rcx                        ; разобраться с rcx
+.op_is_o:                
+                pop rcx                        ; разобраться с rcx
                 pop rdx
                 push rcx
                 push rdx
 
                 mov r8, 21
                 mov rcx, 21
+                mov r11, 0b0111
+                mov r13, 3
 
-                mov r9, '0'
-                and rdx, 0x07
-                add r9, rdx
-                mov rdx, r9
-                mov byte [OctToPrint + r8], byte dl
-
-                add r8, -1
-
-.oct_loop_strt:
-                pop rdx
-                shr rdx, 3
-                push rdx
-
-                mov r9, '0'
-                and rdx, 0x07
-                add r9, rdx
-                mov rdx, r9
-                mov byte [OctToPrint + r8], dl
-
-                add r8, -1
-                loop .oct_loop_strt 
-
-
-                pop rdx
-
-                pop rcx
-                push OctToPrint
-                push rcx
-
-                jmp .strcmp_no_zero
-
-                pop rcx
+                jmp .itoa_2x
+                
                 jmp .return
 ;---------------------------------------------
 .op_is_b:       pop rcx
@@ -287,7 +220,7 @@ OpHandler:
                 
 .skip:          inc rbx
                 loop .binary_loop
-
+ 
 .end_of_bin:    inc rax 
 
                 pop rcx
@@ -296,21 +229,55 @@ OpHandler:
                 mov byte [rbx], '0'
                 inc rbx
                 jmp .end_of_bin
-;---------------------------------------------
+;==============================================================
+.itoa_2x:       
+                mov r9, HexTransform
+                and rdx, r11
+                add r9, rdx
+                mov dl, byte [r9]
+                mov byte [OctToPrint + r8], byte dl
 
-.return:        push r11
+                add r8, -1
+
+.itoa_loop_strt:
+                pop rdx
+                push rcx
+                mov rcx, r13
+                shr rdx, cl
+                pop rcx
+
+                push rdx
+
+                mov r9, HexTransform
+                and rdx, r11
+                add r9, rdx
+                mov dl, byte [r9]
+                mov byte [OctToPrint + r8], dl
+
+                add r8, -1
+                loop .itoa_loop_strt 
+
+                pop rdx
+                pop rcx
+                push OctToPrint
+                push rcx
+                
+                jmp .strcmp_no_zero
+
+                jmp .return
+;==============================================================
+.return:        push r12
                 ret
 ;==============================================================
 end_of_prog:
-                mov rax, 1
-                xor rbx, rbx
-                int 0x80
+                push r15
+                ret
 ;==============================================================
 jopa_happend:
                 mov rax, 4
                 mov rbx, 1
                 mov rcx, jopa
-                mov rdx, 44
+                mov rdx, 46
                 int 0x80
                 jmp end_of_prog
 ;==============================================================
@@ -320,22 +287,34 @@ section .data
 NUMBER_OF_OP    equ 7
 BUFFER_SIZE     equ 200
 ;---------------------------------------------
-JMPmas:         dq  OpHandler.op_is_c, OpHandler.op_is_perc, OpHandler.op_is_s, OpHandler.op_is_x, OpHandler.op_is_d, OpHandler.op_is_o, OpHandler.op_is_b
-OPmas:          db "c%sxdob"
+JMPmas:         dq  OpHandler.op_is_b 
+                dq  OpHandler.op_is_c 
+                dq  OpHandler.op_is_d
+                times 10 dq jopa_happend 
+                dq  OpHandler.op_is_o
+                times 3 dq jopa_happend 
+                dq  OpHandler.op_is_s
+                times 4 dq jopa_happend 
+                dq  OpHandler.op_is_x
+
+OPmas:          db "%bcdosx"
+;                 98,99,100,111,115,120
 ;---------------------------------------------
 Buffer:         times BUFFER_SIZE db '_'
 ;---------------------------------------------
 HexTransform:   db "0123456789ABCDEF"
 ;---------------------------------------------
-StrToPrint:     db "Asskar$"
-HexToPrint:     db "0000000000000000$"
-OctToPrint:     db "0000000000000000000000$"
-DecToPrint:     db "00000000000000000000$"
+StrToPrint1:    db "I$"
+StrToPrint2:    db "exactly know that$"
+StrToPrint3:    db "love$"
 ;---------------------------------------------
-jopa:           db "default case is running... full jopa happend", 0x0a
-
-;string %s|char %c|percent %%|binary %b|hex %x|oct %o|dec is %d
-InpStr:         db "im %s and i listen %% %c %s %%. %d in d its %o in o %b in b %x in x",0x0a,"I %s %x %d%%%c%b",0x0a,"$", 0x0a
-InpStrLen       equ $ - InpStr
+OctToPrint:     db "0000000000000000000000", 0x00
+DecToPrint:     db "00000000000000000000", 0x00
+;---------------------------------------------
+jopa:           db "default case is running... full jopa happened", 0x0a
+;---------------------------------------------
+InpStr:         db "%x",0x0a,"$", 0x00
+;---------------------------------------------
 Trash_clean:    times BUFFER_SIZE db ' '
 ;_printf ("im %s and i listen %% %c %s %%. %d in d its %o in o %b in b %x in x\n I %s %x %d%%%c%b\n$", str_from, '+', str, 42, 42, 42, 42, "love", 3802, 100, 33, 15);
+;-----------------------------------------------------------
